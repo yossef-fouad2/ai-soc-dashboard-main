@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <meta name="description" content="Local security-log investigation workbench for stored analysis runs and evidence.">
+  <title>SOC | Investigation Workbench</title>
+  <link rel="stylesheet" href="./styles.css">
+  <script src="./dashboard.js" defer></script>
+</head>
+<body>
+  <a class="skip-link" href="#investigation">Skip to alert investigation</a>
+  <div id="workspace-shell" class="workspace-shell">
+    <header class="masthead">
+      <div class="identity">
+        <span class="console-mark" aria-hidden="true"><span></span><span></span><span></span><span></span></span>
+        <div>
+          <p class="eyebrow">SOC / Local Analyst</p>
+          <h1>Investigation Workbench</h1>
+        </div>
+      </div>
+      <div class="masthead-actions">
+        <span id="connection-state" class="connection-state is-loading" role="status">Connecting to API</span>
+        <button id="refresh-button" class="button button-quiet" type="button" title="Read stored state. Does not import, analyze, train, or request explanations.">Refresh Stored State</button>
+      </div>
+    </header>
+
+    <main id="main-content" class="main-content">
+      <noscript><div class="message is-error">JavaScript is required for the investigation workbench. No analysis runs start without an explicit request.</div></noscript>
+      <div id="global-message" class="message" role="status" aria-live="polite" hidden></div>
+
+      <section class="panel workspace-panel" aria-labelledby="workspace-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">01 / Ingest + Analyze</p>
+            <h2 id="workspace-title">Analysis Workspace</h2>
+          </div>
+          <p class="section-note">Finite snapshots. Explicit runs. No live collection.</p>
+        </div>
+        <div class="workspace-grid">
+          <div class="import-controls">
+            <label for="preset-select">Reference Dataset</label>
+            <div class="input-action">
+              <select id="preset-select" aria-describedby="preset-description" disabled><option value="">Loading presets...</option></select>
+              <button id="import-preset" class="button" type="button" disabled>Import Preset</button>
+            </div>
+            <p id="preset-description" class="field-help">Source information will appear here.</p>
+            <div class="file-control">
+              <label for="upload-file">Or Import a File</label>
+              <div class="input-action">
+                <input id="upload-file" type="file" accept=".csv,.log,.txt" aria-describedby="import-limits">
+                <button id="import-file" class="button button-quiet" type="button" disabled>Import File</button>
+              </div>
+              <p id="import-limits" class="field-help">CSV, LOG or TXT. Files are validated by the API; original sources are preserved.</p>
+            </div>
+            <details class="notice-details">
+              <summary>Source Notices + Limitations</summary>
+              <p id="preset-notice" class="field-help">Loading recorded source notices...</p>
+              <p class="field-help">AIT is simulated-testbed network data. OpenSSH has no independent attack labels. Sources and clocks are not automatically correlated.</p>
+            </details>
+          </div>
+          <div class="snapshot-controls">
+            <label for="dataset-select">Imported Dataset</label>
+            <select id="dataset-select" disabled><option value="">Loading datasets...</option></select>
+            <div class="run-selector">
+              <label for="run-select">Stored Analysis Run</label>
+              <select id="run-select" aria-describedby="run-selection-help" disabled><option value="">Loading runs...</option></select>
+              <p id="run-selection-help" class="field-help">Changing a dataset or run only reads stored state.</p>
+            </div>
+            <div class="analyze-row">
+              <button id="analyze-button" class="button button-primary" type="button" disabled>Run Analysis</button>
+              <p class="field-help">Uses the configuration below. No retraining or language-model call.</p>
+            </div>
+          </div>
+        </div>
+        <details id="config-details" class="config-details">
+          <summary><span>Detection Configuration</span><span class="summary-note">Applies to the next deliberate run</span></summary>
+          <form id="analysis-config">
+            <fieldset id="config-fields" class="config-grid">
+              <legend class="sr-only">Rule thresholds, inclusive event-time windows and grouping configuration</legend>
+              <div class="field"><label for="failure-threshold">Failed Auth Threshold</label><input id="failure-threshold" data-config="failure_threshold" type="number" min="2" max="1000" step="1" value="5" required><span class="field-help">Explicit failures / IP, account, host</span></div>
+              <div class="field"><label for="failure-window">Failure Window (s)</label><input id="failure-window" data-config="failure_window_seconds" type="number" min="1" max="86400" step="1" value="300" required><span class="field-help">Inclusive event-time window</span></div>
+              <div class="field"><label for="scan-threshold">Distinct Port Threshold</label><input id="scan-threshold" data-config="scan_port_threshold" type="number" min="2" max="65536" step="1" value="20" required><span class="field-help">Ports / source + destination</span></div>
+              <div class="field"><label for="scan-window">Scan Window (s)</label><input id="scan-window" data-config="scan_window_seconds" type="number" min="1" max="3600" step="1" value="60" required><span class="field-help">Inclusive event-time window</span></div>
+              <div class="field"><label for="success-window">Accepted Login Window (s)</label><input id="success-window" data-config="success_window_seconds" type="number" min="1" max="86400" step="1" value="300" required><span class="field-help">After a same-identity failure burst</span></div>
+              <div class="field"><label for="auth-cooldown">Auth Cooldown (s)</label><input id="auth-cooldown" data-config="auth_cooldown_seconds" type="number" min="0" max="86400" step="1" value="300" required><span class="field-help">Summarize continuing auth bursts</span></div>
+              <div class="field"><label for="scan-cooldown">Scan Cooldown (s)</label><input id="scan-cooldown" data-config="scan_cooldown_seconds" type="number" min="0" max="86400" step="1" value="60" required><span class="field-help">Summarize continuing scans</span></div>
+              <div class="field"><label for="ml-bucket">ML Grouping Bucket (s)</label><input id="ml-bucket" data-config="ml_bucket_seconds" type="number" min="1" max="3600" step="1" value="60" required><span class="field-help">Anomalous flows / endpoint pair</span></div>
+            </fieldset>
+            <div class="config-footer"><p class="field-help">Severity is investigation priority, not confidence. Detections describe suspected activity, not confirmed attacks.</p><button id="reset-config" class="button button-small button-quiet" type="button">Reset API Defaults</button></div>
+          </form>
+        </details>
+        <details id="dataset-details" class="dataset-details">
+          <summary>Dataset Provenance + Import Accounting</summary>
+          <div id="dataset-context" class="detail-content"><p class="empty-note">Select an imported dataset to inspect its sources, recorded clock and parsing warnings.</p></div>
+        </details>
+        <div id="control-message" class="message" role="status" aria-live="polite" hidden></div>
+      </section>
+
+      <section class="health-grid" aria-label="Run and model health">
+        <article class="panel health-card">
+          <div class="card-heading"><h2>Run Ledger</h2><span id="run-state" class="badge state-none">No Run</span></div>
+          <p id="run-name" class="ledger-name">Select a stored snapshot</p>
+          <dl id="run-details" class="compact-facts"></dl>
+          <p id="active-run-note" class="field-help">Analysis status is read from the API.</p>
+          <details id="run-record-details" class="record-details" hidden><summary>Stored Configuration + Metrics</summary><div id="run-record" class="detail-content"></div></details>
+          <div id="run-warnings" class="warning-list" aria-live="polite"></div>
+        </article>
+        <article class="panel health-card">
+          <div class="card-heading"><h2>Network Model</h2><span id="model-state" class="badge state-none">Not Read</span></div>
+          <p id="model-message" class="ledger-name">Reading model availability...</p>
+          <dl id="model-details" class="compact-facts"></dl>
+          <p class="field-help">A missing model does not suppress rules. Authentication bypasses network ML. Model margins are not attack probabilities.</p>
+        </article>
+      </section>
+
+      <section class="stat-grid" aria-label="Selected run counts">
+        <article class="stat-card"><p>Raw Records</p><strong id="raw-count">--</strong><span>Selected run / input</span></article>
+        <article class="stat-card stat-eligible"><p>Eligible Events</p><strong id="eligible-count">--</strong><span>Selected run / normalized</span></article>
+        <article class="stat-card"><p>Skipped Records</p><strong id="skipped-count">--</strong><span>Selected run / import accounting</span></article>
+        <article class="stat-card stat-alerts"><p>Filtered Alerts</p><strong id="alert-count">--</strong><span>Stored suspected-activity groups</span></article>
+      </section>
+      <div class="counts-caption"><p>Event totals are unfiltered for the selected run. Alerts group triggered detections, so event counts and alert counts differ.</p><p id="count-breakdown" class="mono">Select a run to read its accounting.</p></div>
+
+      <div class="investigation-grid">
+        <div class="alert-column">
+          <section class="panel profile-panel" aria-labelledby="profile-title">
+            <div class="section-heading"><div><p class="eyebrow">02 / Triage</p><h2 id="profile-title">Investigation Profile</h2></div><span class="small-tag">Filtered Stored Summary</span></div>
+            <div class="charts-grid">
+              <figure class="chart"><figcaption>Priority / Severity <span>Not confidence</span></figcaption><div id="severity-chart" class="bar-chart" role="img" aria-label="Severity counts have not been loaded"><p class="empty-note">Select a completed run.</p></div></figure>
+              <figure class="chart"><figcaption>Suspected Activity <span>Not confirmed attacks</span></figcaption><div id="activity-chart" class="bar-chart" role="img" aria-label="Activity counts have not been loaded"><p class="empty-note">Select a completed run.</p></div></figure>
+            </div>
+            <div class="profile-footer"><p id="method-counts">Detection-method counts have not been loaded.</p><p id="summary-source">Charts use the persisted summary for the same run and filters as the queue, never the current page of rows.</p></div>
+            <div id="summary-record" class="summary-record"></div>
+          </section>
+
+          <section id="investigation" class="panel alert-panel" aria-labelledby="alert-title" tabindex="-1">
+            <div class="section-heading"><div><p class="eyebrow">03 / Investigate</p><h2 id="alert-title">Alert Queue</h2></div><span id="queue-total" class="small-tag">No Run Selected</span></div>
+            <form id="alert-filters" class="filter-grid" role="search" aria-label="Filter stored alerts">
+              <div class="field search-field"><label for="alert-search">Search Evidence Identifiers</label><input id="alert-search" type="search" maxlength="200" placeholder="IP, account, host, title..." autocomplete="off"></div>
+              <div class="field"><label for="severity-filter">Priority</label><select id="severity-filter"><option value="">All Priorities</option><option value="Critical">Critical</option><option value="High">High</option><option value="Medium">Medium</option><option value="Low">Low</option></select></div>
+              <div class="field"><label for="activity-filter">Suspected Activity</label><select id="activity-filter"><option value="">All Activities</option><option value="port_scan">Port Scan</option><option value="brute_force">Brute Force</option><option value="suspicious_login">Suspicious Login</option><option value="network_anomaly">Network Anomaly</option></select></div>
+              <div class="field"><label for="method-filter">Detection Method</label><select id="method-filter"><option value="">All Methods</option><option value="rule">Rule (Including Both)</option><option value="ml">ML (Including Both)</option><option value="both">Both Methods</option></select></div>
+              <div class="field"><label for="status-filter">Alert Status</label><select id="status-filter"><option value="">All Statuses</option><option value="new">New</option><option value="investigating">Investigating</option><option value="resolved">Resolved</option><option value="false_positive">False Positive</option></select></div>
+              <button id="clear-filters" class="button button-small button-quiet filter-reset" type="button">Clear Filters</button>
+            </form>
+            <div id="alert-message" class="message" role="status" aria-live="polite" hidden></div>
+            <div class="selection-toolbar">
+              <div><strong id="selection-count">0 Checked</strong><span class="field-help">Same run only; selections can span pages.</span></div>
+              <div class="selection-actions"><button id="check-page" class="button button-small button-quiet mobile-check" type="button" disabled>Check Page</button><button id="clear-selection" class="button button-small button-quiet" type="button" disabled>Clear Checked</button><button id="new-incident" class="button button-small" type="button" disabled>Create Incident</button></div>
+            </div>
+            <p id="result-state" class="result-state" role="status" aria-live="polite">No stored results loaded.</p>
+            <div id="alert-table-region" class="table-wrap" role="region" aria-label="Stored alerts; scroll to inspect all rows" tabindex="0" aria-busy="false">
+              <table class="alert-table" role="table">
+                <caption class="sr-only">Stored alerts with investigation priority, suspected activity, source identifiers, recorded time, methods and status. Open any alert to inspect full evidence.</caption>
+                <thead><tr><th class="col-select" scope="col"><input id="select-page" type="checkbox" aria-label="Select all alerts on the current page" disabled></th><th scope="col">Priority</th><th scope="col">Suspected Activity</th><th scope="col">Endpoints</th><th scope="col">Identity / Host</th><th scope="col">Recorded Event Time</th><th scope="col">Method</th><th scope="col">Status</th></tr></thead>
+                <tbody id="alert-table-body"><tr class="empty-row"><td colspan="8">Select a completed run to inspect stored alerts. Importing and refreshing do not start analysis.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="pagination"><p id="page-position" aria-live="polite">No results loaded</p><div><button id="prev-page" class="button button-small button-quiet" type="button" disabled>Previous</button><button id="next-page" class="button button-small button-quiet" type="button" disabled>Next</button></div></div>
+          </section>
+        </div>
+
+        <aside class="panel incident-panel" aria-labelledby="incident-title-heading">
+          <div class="section-heading"><div><p class="eyebrow">04 / Analyst Ledger</p><h2 id="incident-title-heading">Manual Incidents</h2></div><span id="incident-total" class="small-tag">--</span></div>
+          <p class="incident-notice">Analyst-created groupings, not automatic correlation or confirmed compromise. Membership stays inside the selected run.</p>
+          <div id="incident-message" class="message" role="status" aria-live="polite" hidden></div>
+          <div id="incident-list" class="incident-list" aria-busy="false"><p class="empty-note">Select a completed run to read its incident ledger.</p></div>
+          <div id="incident-pagination" class="pagination incident-pagination" hidden><p id="incident-page-position"></p><div><button id="incident-prev" class="button button-small button-quiet" type="button" disabled>Previous</button><button id="incident-next" class="button button-small button-quiet" type="button" disabled>Next</button></div></div>
+          <div id="incident-editor-placeholder" class="editor-placeholder"><span class="ledger-rule" aria-hidden="true"></span><h3>Build an Investigation</h3><p>Check alerts in the queue and choose Create Incident. Open a stored incident to edit its title, notes, status or members.</p></div>
+          <form id="incident-form" class="incident-form" hidden>
+            <div class="card-heading"><h3 id="incident-editor-title">Incident Draft</h3><span id="incident-editor-id" class="mono muted"></span></div>
+            <div class="field"><label for="incident-title">Title</label><input id="incident-title" type="text" maxlength="160" required autocomplete="off"></div>
+            <div class="field"><label for="incident-notes">Investigation Notes</label><textarea id="incident-notes" maxlength="10000" rows="5" placeholder="Record observations, follow-up and disposition."></textarea></div>
+            <div class="field"><label for="incident-status">Incident Status</label><select id="incident-status"><option value="open">Open</option><option value="investigating">Investigating</option><option value="closed">Closed</option></select><p id="incident-status-help" class="field-help">New incidents start open.</p></div>
+            <div class="member-heading"><h4>Alert Membership</h4><span id="incident-member-count" class="small-tag">0</span></div>
+            <div class="member-actions"><button id="add-checked" class="button button-small button-quiet" type="button" disabled>Add Checked</button><button id="remove-checked" class="button button-small button-quiet" type="button" disabled>Remove Checked</button></div>
+            <ul id="incident-members" class="member-list"></ul>
+            <p class="field-help">Membership changes are drafts until saved. Inspect any member for recorded evidence.</p>
+            <div class="editor-actions"><button id="save-incident" class="button button-primary" type="submit">Create Incident</button><button id="cancel-incident" class="button button-quiet" type="button">Close Editor</button></div>
+          </form>
+        </aside>
+      </div>
+      <footer class="workspace-footer"><span>Local SOC Prototype / Stored-State Investigation</span><span>Priority is not confidence. Generated text is not evidence.</span></footer>
+    </main>
+  </div>
+
+  <div id="drawer-backdrop" class="drawer-backdrop" hidden></div>
+  <aside id="evidence-panel" class="evidence-panel" role="dialog" aria-modal="true" aria-labelledby="evidence-title" aria-describedby="evidence-disclaimer" tabindex="-1" hidden>
+    <header class="evidence-header"><div><p class="eyebrow">Evidence / Stored Alert</p><h2 id="evidence-title">Alert Evidence</h2><p id="evidence-alert-id" class="mono muted"></p></div><button id="close-evidence" class="button button-small button-quiet" type="button" aria-label="Close evidence drawer">Close</button></header>
+    <p id="evidence-disclaimer" class="evidence-disclaimer">Suspected activity only. Severity indicates investigation priority, not certainty. Source-relative authentication clocks must not be correlated with AIT UTC times.</p>
+    <div id="evidence-message" class="message" role="status" aria-live="polite" hidden></div>
+    <div id="evidence-content" class="evidence-content"><p class="empty-note">Choose an alert to inspect its evidence.</p></div>
+  </aside>
+</body>
+</html>
